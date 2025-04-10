@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spaceship Shooter Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    canvas { display: block; background: #000; }
+    #ui {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: white;
+      font-family: Arial, sans-serif;
+    }
+    #startScreen, #gameOverScreen {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial, sans-serif;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <div id="ui">
+    <div id="health">HP: 100</div>
+    <div id="energy">Energy: 100</div>
+    <div id="level">Level: 1</div>
+    <div id="candies">Candies: 0</div>
+  </div>
+  <div id="startScreen">
+    <h1>Spaceship Game</h1>
+    <button onclick="startGame()">Play</button>
+  </div>
+  <div id="gameOverScreen" style="display:none">
+    <h1>Game Over</h1>
+    <div id="scoreDisplay"></div>
+    <button onclick="startGame()">Play Again</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    let keys = {}, mouse = { x: 0, y: 0, down: false }, bullets = [], enemyBullets = [], enemies = [], candies = [], autoFire = false;
+    let spaceship, gameRunning = false, lastFire = 0, score = 0, level = 1, enemyCooldown = 0, speedBoostTime = 0;
+
+    function startGame() {
+      document.getElementById('startScreen').style.display = 'none';
+      document.getElementById('gameOverScreen').style.display = 'none';
+      spaceship = {
+        x: canvas.width / 2, y: canvas.height / 2, size: 20,
+        speed: 2, hp: 100, energy: 100,
+        level: 1, candies: 0,
+        autoFire: false,
+        lastRegen: Date.now()
+      };
+      bullets = [];
+      enemies = [];
+      enemyBullets = [];
+      candies = [];
+      score = 0;
+      level = 1;
+      gameRunning = true;
+      requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener('keydown', e => {
+      keys[e.key.toLowerCase()] = true;
+      if (e.key === 'e') spaceship.autoFire = !spaceship.autoFire;
+      if (e.code === 'Space') speedBoostTime = Date.now();
+    });
+    document.addEventListener('keyup', e => {
+      keys[e.key.toLowerCase()] = false;
+    });
+    canvas.addEventListener('mousedown', () => mouse.down = true);
+    canvas.addEventListener('mouseup', () => mouse.down = false);
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - rect.left;
+      mouse.y = e.clientY - rect.top;
+    });
+
+    function fireBullet() {
+      const angle = Math.atan2(mouse.y - spaceship.y, mouse.x - spaceship.x);
+      bullets.push({
+        x: spaceship.x + Math.cos(angle) * spaceship.size,
+        y: spaceship.y + Math.sin(angle) * spaceship.size,
+        dx: Math.cos(angle) * 4,
+        dy: Math.sin(angle) * 4,
+        time: Date.now()
+      });
+    }
+
+    function spawnEnemy() {
+      const edge = Math.floor(Math.random() * 4);
+      let x, y;
+      if (edge === 0) { x = Math.random() * canvas.width; y = -40; }
+      if (edge === 1) { x = canvas.width + 40; y = Math.random() * canvas.height; }
+      if (edge === 2) { x = Math.random() * canvas.width; y = canvas.height + 40; }
+      if (edge === 3) { x = -40; y = Math.random() * canvas.height; }
+      enemies.push({ x, y, size: 20, hp: 20 + level * 10, speed: 1 + level * 0.2, lastShot: Date.now() });
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = '#222';
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+    }
+
+    function drawTriangle(x, y, size, angle, color) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(size, 0);
+      ctx.lineTo(-size / 2, -size / 1.5);
+      ctx.lineTo(-size / 2, size / 1.5);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function gameLoop() {
+      if (!gameRunning) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+
+      const now = Date.now();
+
+      let currentSpeed = spaceship.speed;
+      if (now - speedBoostTime < 10000 && spaceship.energy > 0) {
+        currentSpeed *= 2;
+        spaceship.energy -= 0.5;
+      } else if (spaceship.energy < 100) {
+        spaceship.energy += 0.2;
+      }
+
+      if (keys['w']) spaceship.y -= currentSpeed;
+      if (keys['s']) spaceship.y += currentSpeed;
+      if (keys['a']) spaceship.x -= currentSpeed;
+      if (keys['d']) spaceship.x += currentSpeed;
+
+      spaceship.x = Math.max(0, Math.min(canvas.width, spaceship.x));
+      spaceship.y = Math.max(0, Math.min(canvas.height, spaceship.y));
+
+      const angleToMouse = Math.atan2(mouse.y - spaceship.y, mouse.x - spaceship.x);
+      drawTriangle(spaceship.x, spaceship.y, spaceship.size, angleToMouse, 'white');
+
+      if ((mouse.down || spaceship.autoFire) && now - lastFire > 300) {
+        fireBullet();
+        lastFire = now;
+      }
+
+      if (now - spaceship.lastRegen > 1000 && spaceship.hp < 100 + spaceship.level * 10) {
+        spaceship.hp += 1;
+        spaceship.lastRegen = now;
+      }
+
+      bullets = bullets.filter(b => now - b.time < 8000);
+      bullets.forEach(b => {
+        b.x += b.dx;
+        b.y += b.dy;
+        ctx.fillStyle = 'cyan';
+        ctx.fillRect(b.x, b.y, 4, 4);
+      });
+
+      if (enemyCooldown <= 0) {
+        spawnEnemy();
+        enemyCooldown = 2000 - level * 100;
+      } else {
+        enemyCooldown -= 16;
+      }
+
+      enemies.forEach((e, i) => {
+        const dx = spaceship.x - e.x;
+        const dy = spaceship.y - e.y;
+        const angle = Math.atan2(dy, dx);
+        e.x += Math.cos(angle) * e.speed;
+        e.y += Math.sin(angle) * e.speed;
+
+        drawTriangle(e.x, e.y, e.size, angle, 'red');
+
+        if (now - e.lastShot > 2000) {
+          enemyBullets.push({ x: e.x, y: e.y, dx: Math.cos(angle) * 3, dy: Math.sin(angle) * 3 });
+          e.lastShot = now;
+        }
+      });
+
+      enemyBullets.forEach(b => {
+        b.x += b.dx;
+        b.y += b.dy;
+        ctx.fillStyle = 'orange';
+        ctx.fillRect(b.x, b.y, 4, 10);
+        if (b.x < spaceship.x + spaceship.size && b.x + 4 > spaceship.x - spaceship.size && b.y < spaceship.y + spaceship.size && b.y + 10 > spaceship.y - spaceship.size) {
+          spaceship.hp -= 20;
+        }
+      });
+
+      bullets.forEach((b, i) => {
+        enemies.forEach((e, j) => {
+          if (b.x < e.x + e.size && b.x + 4 > e.x - e.size && b.y < e.y + e.size && b.y + 4 > e.y - e.size) {
+            e.hp -= 20;
+            bullets.splice(i, 1);
+            if (e.hp <= 0) {
+              enemies.splice(j, 1);
+              spaceship.candies++;
+              score++;
+              if (spaceship.candies % 3 === 0) spaceship.level++;
+            }
+          }
+        });
+      });
+
+      document.getElementById('health').innerText = `HP: ${Math.floor(spaceship.hp)}`;
+      document.getElementById('energy').innerText = `Energy: ${Math.floor(spaceship.energy)}`;
+      document.getElementById('level').innerText = `Level: ${spaceship.level}`;
+      document.getElementById('candies').innerText = `Candies: ${spaceship.candies}`;
+
+      if (spaceship.hp <= 0) {
+        endGame();
+        return;
+      }
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+      gameRunning = false;
+      document.getElementById('scoreDisplay').innerText = `You destroyed ${score} enemies.`;
+      document.getElementById('gameOverScreen').style.display = 'flex';
+    }
+  </script>
+</body>
+</html>
