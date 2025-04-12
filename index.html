@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spaceship Shooter Game</title>
+  <title>Game Phi Thuyền Bắn Đạn</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
@@ -33,29 +33,63 @@
       font-size: 18px;
       cursor: pointer;
     }
+    #highScores {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      color: white;
+      font-family: Arial, sans-serif;
+      max-height: 80%;
+      overflow-y: auto;
+      width: 250px;
+    }
+    #highScores h3 {
+      margin-bottom: 10px;
+    }
+    #highScores ul {
+      list-style: none;
+      padding: 0;
+    }
+    #highScores li {
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
   <div id="ui">
-    <div id="health">HP: 100</div>
-    <div id="energy">Energy: 100</div>
-    <div id="level">Level: 1</div>
-    <div id="candies">Candies: 0</div>
+    <div id="health">Máu: 100</div>
+    <div id="energy">Năng Lượng: 100</div>
+    <div id="level">Cấp độ: 1</div>
+    <div id="candies">Kẹo: 0</div>
   </div>
   <div id="startScreen">
-    <h1>Spaceship Game</h1>
-    <button onclick="startGame()">Play</button>
+    <h1>Game Phi Thuyền</h1>
+    <label for="playerName">Nhập tên của bạn: </label>
+    <input type="text" id="playerName" placeholder="Tên người chơi" />
+    <button onclick="startGame()">Chơi</button>
   </div>
   <div id="gameOverScreen" style="display:none">
-    <h1>Game Over</h1>
+    <h1>Game Kết Thúc</h1>
     <div id="scoreDisplay"></div>
-    <button onclick="startGame()">Play Again</button>
+    <label for="playerName">Nhập tên để lưu điểm: </label>
+    <input type="text" id="playerNameOnEnd" placeholder="Tên người chơi" />
+    <button onclick="saveScore()">Lưu điểm</button>
+    <button onclick="startGame()">Chơi lại</button>
+  </div>
+  
+  <div id="highScores">
+    <h3>Bảng Xếp Hạng</h3>
+    <ul id="scoreList"></ul>
   </div>
 
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    let playerName = "";
+    let highScores = JSON.parse(localStorage.getItem('highScores')) || [];
 
     function resizeCanvas() {
       canvas.width = window.innerWidth;
@@ -68,6 +102,7 @@
     let spaceship, gameRunning = false, lastFire = 0, score = 0, level = 1, enemyCooldown = 0, speedBoostTime = 0;
 
     function startGame() {
+      playerName = document.getElementById('playerName').value || "Người chơi";
       document.getElementById('startScreen').style.display = 'none';
       document.getElementById('gameOverScreen').style.display = 'none';
       spaceship = {
@@ -245,10 +280,10 @@
         });
       });
 
-      document.getElementById('health').innerText = `HP: ${Math.floor(spaceship.hp)}`;
-      document.getElementById('energy').innerText = `Energy: ${Math.floor(spaceship.energy)}`;
-      document.getElementById('level').innerText = `Level: ${spaceship.level}`;
-      document.getElementById('candies').innerText = `Candies: ${spaceship.candies}`;
+      document.getElementById('health').innerText = `Máu: ${Math.floor(spaceship.hp)}`;
+      document.getElementById('energy').innerText = `Năng Lượng: ${Math.floor(spaceship.energy)}`;
+      document.getElementById('level').innerText = `Cấp độ: ${spaceship.level}`;
+      document.getElementById('candies').innerText = `Kẹo: ${spaceship.candies}`;
 
       if (spaceship.hp <= 0) {
         endGame();
@@ -260,9 +295,30 @@
 
     function endGame() {
       gameRunning = false;
-      document.getElementById('scoreDisplay').innerText = `You destroyed ${score} enemies.`;
+      document.getElementById('scoreDisplay').innerText = `Bạn đã tiêu diệt ${score} kẻ thù.`;
       document.getElementById('gameOverScreen').style.display = 'flex';
     }
+
+    function saveScore() {
+      const playerNameEnd = document.getElementById('playerNameOnEnd').value || playerName;
+      highScores.push({ name: playerNameEnd, score: score });
+      highScores = highScores.sort((a, b) => b.score - a.score).slice(0, 50);
+      localStorage.setItem('highScores', JSON.stringify(highScores));
+      updateHighScores();
+      startGame();
+    }
+
+    function updateHighScores() {
+      const scoreList = document.getElementById('scoreList');
+      scoreList.innerHTML = "";
+      highScores.forEach(score => {
+        const li = document.createElement('li');
+        li.textContent = `${score.name}: ${score.score}`;
+        scoreList.appendChild(li);
+      });
+    }
+
+    updateHighScores();
   </script>
 </body>
 </html>
